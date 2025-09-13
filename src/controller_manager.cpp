@@ -22,9 +22,9 @@ using rcl_interfaces::msg::ParameterType;
 
 namespace controller {
 
-CrazyController::CrazyController()
+Controller::Controller()
 : rclcpp::Node(
-    "crazycontroller_manager",
+    "controller_manager",
     rclcpp::NodeOptions()
       .allow_undeclared_parameters(true)
       .automatically_declare_parameters_from_overrides(true))
@@ -53,13 +53,13 @@ CrazyController::CrazyController()
 
   // 구독자
   sub_track_length_   = this->create_subscription<WpntArray>("/global_waypoints", 10,
-                        std::bind(&CrazyController::track_length_cb, this, std::placeholders::_1));
+                        std::bind(&Controller::track_length_cb, this, std::placeholders::_1));
   sub_local_waypoints_ = this->create_subscription<WpntArray>("/local_waypoints", 10,
-                        std::bind(&CrazyController::local_waypoint_cb, this, std::placeholders::_1));
+                        std::bind(&Controller::local_waypoint_cb, this, std::placeholders::_1));
   sub_car_state_      = this->create_subscription<Odometry>("/car_state/odom", 10,
-                        std::bind(&CrazyController::car_state_cb, this, std::placeholders::_1));
+                        std::bind(&Controller::car_state_cb, this, std::placeholders::_1));
   sub_car_state_frenet_ = this->create_subscription<Odometry>("/car_state/frenet/odom", 10,
-                        std::bind(&CrazyController::car_state_frenet_cb, this, std::placeholders::_1));
+                        std::bind(&Controller::car_state_frenet_cb, this, std::placeholders::_1));
 
   // ✅ ParameterEventHandler는 생성자 밖(노드가 shared_ptr로 소유된 이후)에 초기화
   //    0ms 지연 타이머로 한 번만 실행되게 함
@@ -82,13 +82,13 @@ CrazyController::CrazyController()
   const double period = 1.0 / static_cast<double>(rate_);
   timer_ = this->create_wall_timer(
       std::chrono::duration<double>(period),
-      std::bind(&CrazyController::control_loop, this));
+      std::bind(&Controller::control_loop, this));
 
-  RCLCPP_INFO(this->get_logger(), "CrazyController ready");
+  RCLCPP_INFO(this->get_logger(), "Controller ready");
 }
 
-void CrazyController::wait_for_messages() {
-  RCLCPP_INFO(this->get_logger(), "CrazyController Manager waiting for messages...");
+void Controller::wait_for_messages() {
+  RCLCPP_INFO(this->get_logger(), "Controller Manager waiting for messages...");
   bool track_length_received = false;
   bool waypoint_array_received = false;
   bool car_state_received = false;
@@ -113,7 +113,7 @@ void CrazyController::wait_for_messages() {
   RCLCPP_INFO(this->get_logger(), "All required messages received. Continuing...");
 }
 
-void CrazyController::declare_l1_dynamic_parameters_from_yaml(const std::string& yaml_path) {
+void Controller::declare_l1_dynamic_parameters_from_yaml(const std::string& yaml_path) {
   YAML::Node root = YAML::LoadFile(yaml_path);
   if (!root["controller"] || !root["controller"]["ros__parameters"]) {
     throw std::runtime_error("Invalid l1_params YAML: missing controller.ros__parameters");
@@ -143,7 +143,7 @@ void CrazyController::declare_l1_dynamic_parameters_from_yaml(const std::string&
   declare_double("speed_lookahead_for_steer", params["speed_lookahead_for_steer"].as<double>(), fp(0.0, 0.2, 0.01));
 }
 
-void CrazyController::init_map_controller() {
+void Controller::init_map_controller() {
   const std::string l1_params_path = this->get_parameter("l1_params_path").as_string();
   declare_l1_dynamic_parameters_from_yaml(l1_params_path);
 
@@ -172,8 +172,8 @@ void CrazyController::init_map_controller() {
       info, warn);
 }
 
-void CrazyController::on_parameter_event(const rcl_interfaces::msg::ParameterEvent & event) {
-  if (event.node != "/crazycontroller_manager") return;
+void Controller::on_parameter_event(const rcl_interfaces::msg::ParameterEvent & event) {
+  if (event.node != "/controller_manager") return;
   if (!map_controller_) return;
   if (mode_ != "MAP") return;
 
@@ -195,12 +195,12 @@ void CrazyController::on_parameter_event(const rcl_interfaces::msg::ParameterEve
   RCLCPP_INFO(this->get_logger(), "Updated parameters");
 }
 
-void CrazyController::track_length_cb(const WpntArray::SharedPtr msg) {
+void Controller::track_length_cb(const WpntArray::SharedPtr msg) {
   if (msg->wpnts.empty()) return;
   track_length_ = msg->wpnts.back().s_m;
 }
 
-void CrazyController::local_waypoint_cb(const WpntArray::SharedPtr msg) {
+void Controller::local_waypoint_cb(const WpntArray::SharedPtr msg) {
   const auto N = static_cast<int>(msg->wpnts.size());
   if (N <= 0) return;
 
@@ -223,7 +223,7 @@ void CrazyController::local_waypoint_cb(const WpntArray::SharedPtr msg) {
   waypoint_safety_counter_ = 0;
 }
 
-void CrazyController::car_state_cb(const Odometry::SharedPtr msg) {
+void Controller::car_state_cb(const Odometry::SharedPtr msg) {
   speed_now_ = msg->twist.twist.linear.x;
 
   const auto & p = msg->pose.pose.position;
@@ -238,7 +238,7 @@ void CrazyController::car_state_cb(const Odometry::SharedPtr msg) {
   position_in_map_ = pose;
 }
 
-void CrazyController::car_state_frenet_cb(const Odometry::SharedPtr msg) {
+void Controller::car_state_frenet_cb(const Odometry::SharedPtr msg) {
   const double s  = msg->pose.pose.position.x;
   const double d  = msg->pose.pose.position.y;
   const double vs = msg->twist.twist.linear.x;
@@ -249,7 +249,7 @@ void CrazyController::car_state_frenet_cb(const Odometry::SharedPtr msg) {
   position_in_map_frenet_ = fr;
 }
 
-std::pair<double,double> CrazyController::map_cycle() {
+std::pair<double,double> Controller::map_cycle() {
   auto res = map_controller_->main_loop(
       position_in_map_.value(),
       waypoint_array_in_map_,
@@ -260,14 +260,14 @@ std::pair<double,double> CrazyController::map_cycle() {
 
   waypoint_safety_counter_ += 1;
   if (waypoint_safety_counter_ >= rate_ * 5) {
-    RCLCPP_WARN(this->get_logger(), "[crazycontroller_manager] No fresh local waypoints. STOPPING!!");
+    RCLCPP_WARN(this->get_logger(), "[controller_manager] No fresh local waypoints. STOPPING!!");
     res.speed = 0.0;
     res.steering_angle = 0.0;
   }
   return {res.speed, res.steering_angle};
 }
 
-void CrazyController::control_loop() {
+void Controller::control_loop() {
   if (mode_ != "MAP" || !map_controller_) {
     RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Unsupported mode or controller not ready");
     return;

@@ -3,7 +3,7 @@
 <package format="3">
   <name>controller</name>
   <version>0.0.0</version>
-  <description>Simplified controller for time trial racing (C++ port of crazycontroller)</description>
+  <description>Simplified controller for time trial racing</description>
 
   <!-- 원 패키지 메타데이터를 반영 -->
   <maintainer email="nicolas.baumann@pbl.ee.ethz.ch">ForzaETH</maintainer>

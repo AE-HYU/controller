@@ -98,6 +98,7 @@ install(TARGETS
   RUNTIME DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
 install(FILES resource/controller DESTINATION share/ament_index/resource_index/packages)
 install(FILES package.xml DESTINATION share/${PROJECT_NAME})
 
