@@ -66,9 +66,9 @@ bool Controller::initialize() {
     sub_car_state_ = this->create_subscription<Odometry>("/odom", 10,
                      std::bind(&Controller::car_state_cb, this, std::placeholders::_1));
 
-    // Initialize parameter event handler with delayed initialization
+    // Initialize parameter event handler with minimal delay to avoid bad_weak_ptr
     param_init_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(0),
+        std::chrono::milliseconds(10),  // Small delay to ensure shared_ptr is ready
         [this]() {
             param_init_timer_->cancel();
             param_handler_ = std::make_unique<ParameterEventHandler>(
@@ -77,7 +77,7 @@ bool Controller::initialize() {
                 [this](const rcl_interfaces::msg::ParameterEvent & ev) {
                     this->on_parameter_event(ev);
                 });
-            RCLCPP_INFO(this->get_logger(), "ParameterEventHandler initialized");
+            RCLCPP_INFO(this->get_logger(), "✓ ParameterEventHandler initialized");
         });
 
     // Initialize main control timer
@@ -91,15 +91,19 @@ bool Controller::initialize() {
 }
 
 void Controller::init_map_controller() {
+    RCLCPP_INFO(this->get_logger(), "Initializing MAP controller...");
+
     const std::string l1_params_path = this->get_parameter("l1_params_path").as_string();
+    RCLCPP_INFO(this->get_logger(), "Loading L1 parameters from: %s", l1_params_path.c_str());
     declare_l1_dynamic_parameters_from_yaml(l1_params_path);
 
     // Initialize acceleration rolling buffer
     acc_now_ = Eigen::VectorXd::Zero(10);
+    RCLCPP_DEBUG(this->get_logger(), "Acceleration buffer initialized");
 
     // Create MAP controller with logging callbacks
-    auto info = [this](const std::string& s){ RCLCPP_INFO(this->get_logger(), "%s", s.c_str()); };
-    auto warn = [this](const std::string& s){ RCLCPP_WARN(this->get_logger(), "%s", s.c_str()); };
+    auto info = [this](const std::string& s){ RCLCPP_INFO(this->get_logger(), "[MAP] %s", s.c_str()); };
+    auto warn = [this](const std::string& s){ RCLCPP_WARN(this->get_logger(), "[MAP] %s", s.c_str()); };
 
     map_controller_ = std::make_unique<controller::MAP_Controller>(
         this->get_parameter("t_clip_min").as_double(),
@@ -117,6 +121,8 @@ void Controller::init_map_controller() {
         static_cast<double>(rate_),
         LUT_path_,
         info, warn);
+
+    RCLCPP_INFO(this->get_logger(), "✓ MAP controller initialized successfully");
 }
 
 void Controller::declare_l1_dynamic_parameters_from_yaml(const std::string& yaml_path) {
@@ -161,21 +167,34 @@ void Controller::wait_for_messages() {
     bool waypoint_array_received = false;
     bool car_state_received = false;
 
+    auto start_time = this->get_clock()->now();
     while (rclcpp::ok() && (!waypoint_array_received || !car_state_received)) {
         rclcpp::spin_some(this->shared_from_this());
 
         if (waypoint_array_in_map_.size() > 0 && !waypoint_array_received) {
-            RCLCPP_INFO(this->get_logger(), "Received waypoint array");
+            RCLCPP_INFO(this->get_logger(), "✓ Received waypoint array (%d waypoints)",
+                       static_cast<int>(waypoint_array_in_map_.rows()));
             waypoint_array_received = true;
         }
         if (speed_now_.has_value() && position_in_map_.has_value() &&
             position_in_map_frenet_.has_value() && !car_state_received) {
-            RCLCPP_INFO(this->get_logger(), "Received car state messages");
+            RCLCPP_INFO(this->get_logger(), "✓ Received car state: pos=(%.2f,%.2f), speed=%.2f, frenet=(%.2f,%.2f)",
+                       position_in_map_.value()(0), position_in_map_.value()(1), speed_now_.value(),
+                       position_in_map_frenet_.value()(0), position_in_map_frenet_.value()(1));
             car_state_received = true;
         }
+
+        // Log waiting status every 2 seconds
+        auto elapsed = (this->get_clock()->now() - start_time).seconds();
+        if (static_cast<int>(elapsed) % 2 == 0 && elapsed > 0) {
+            RCLCPP_INFO(this->get_logger(), "Waiting... waypoints:%s, car_state:%s (%.1fs elapsed)",
+                       waypoint_array_received ? "✓" : "✗",
+                       car_state_received ? "✓" : "✗", elapsed);
+        }
+
         rclcpp::sleep_for(std::chrono::milliseconds(5));
     }
-    RCLCPP_INFO(this->get_logger(), "All required messages received. Continuing...");
+    RCLCPP_INFO(this->get_logger(), "✓ All required messages received. Controller ready to start!");
 }
 
 void Controller::control_loop() {
@@ -273,9 +292,35 @@ void Controller::car_state_cb(const Odometry::SharedPtr msg) {
     pose << p.x, p.y, yaw;
     position_in_map_ = pose;
 
-    // Extract frenet coordinates from the same odom message
+    // Calculate Frenet coordinates using nearest waypoint
     Eigen::Vector4d fr;
-    fr << 0.0, 0.0, msg->twist.twist.linear.x, msg->twist.twist.linear.y;
+    if (waypoint_array_in_map_.rows() > 0) {
+        Eigen::Vector2d current_pos(p.x, p.y);
+        int nearest_idx = controller::utils::nearest_waypoint(current_pos, waypoint_array_in_map_.leftCols<2>());
+
+        // Use s_m from nearest waypoint and calculate d from track boundaries
+        double s = waypoint_array_in_map_(nearest_idx, 4);  // s_m from waypoint
+
+        // Calculate lateral distance (d) as distance from current position to waypoint
+        Eigen::Vector2d waypoint_pos = waypoint_array_in_map_.row(nearest_idx).head<2>();
+        double d = (current_pos - waypoint_pos).norm();
+
+        // Determine sign of d based on track geometry (left/right of track)
+        // This is a simplified calculation - could be improved with track heading
+        double waypoint_psi = waypoint_array_in_map_(nearest_idx, 6);  // psi_rad
+        Eigen::Vector2d track_direction(std::cos(waypoint_psi), std::sin(waypoint_psi));
+        Eigen::Vector2d to_vehicle = current_pos - waypoint_pos;
+        double cross_product = track_direction.x() * to_vehicle.y() - track_direction.y() * to_vehicle.x();
+        d = (cross_product > 0) ? d : -d;
+
+        fr << s, d, msg->twist.twist.linear.x, msg->twist.twist.linear.y;
+        RCLCPP_DEBUG(this->get_logger(), "Frenet coords: s=%.3f, d=%.3f (nearest_idx=%d)", s, d, nearest_idx);
+    } else {
+        // Fallback when no waypoints available
+        fr << 0.0, 0.0, msg->twist.twist.linear.x, msg->twist.twist.linear.y;
+        RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                              "No waypoints available for Frenet calculation");
+    }
     position_in_map_frenet_ = fr;
 }
 
