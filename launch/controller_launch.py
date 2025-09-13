@@ -35,7 +35,7 @@ def generate_launch_description():
     # Controller node for simulation mode
     controller_sim_node = Node(
         package='controller',
-        executable='controller_manager_node',
+        executable='controller_node',
         name='controller_manager',
         output='screen',
         parameters=[{
@@ -53,7 +53,7 @@ def generate_launch_description():
     # Controller node for real car mode
     controller_real_node = Node(
         package='controller',
-        executable='controller_manager_node',
+        executable='controller_node',
         name='controller_manager',
         output='screen',
         parameters=[{
