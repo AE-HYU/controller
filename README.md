@@ -14,3 +14,4 @@ ros2 launch controller controller_launch.xml
 `config` 폴더 내의 두 파일을 수정하면 됩니다:
 - `l1_params.yaml`
 - `RBC1_pacejka_lookup_table.csv`
+lookup table로는 RBC1만 사용합니다.
