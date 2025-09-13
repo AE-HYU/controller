@@ -51,15 +51,13 @@ Controller::Controller()
     RCLCPP_ERROR(this->get_logger(), "Invalid mode: %s", mode_.c_str());
   }
 
-  // 구독자
-  sub_track_length_   = this->create_subscription<WpntArray>("/global_waypoints", 10,
+  // 구독자 (generic topic names)
+  sub_track_length_   = this->create_subscription<WpntArray>("/planned_path", 10,
                         std::bind(&Controller::track_length_cb, this, std::placeholders::_1));
-  sub_local_waypoints_ = this->create_subscription<WpntArray>("/local_waypoints", 10,
+  sub_local_waypoints_ = this->create_subscription<WpntArray>("/planned_path", 10,
                         std::bind(&Controller::local_waypoint_cb, this, std::placeholders::_1));
-  sub_car_state_      = this->create_subscription<Odometry>("/car_state/odom", 10,
+  sub_car_state_      = this->create_subscription<Odometry>("/odom", 10,
                         std::bind(&Controller::car_state_cb, this, std::placeholders::_1));
-  sub_car_state_frenet_ = this->create_subscription<Odometry>("/car_state/frenet/odom", 10,
-                        std::bind(&Controller::car_state_frenet_cb, this, std::placeholders::_1));
 
   // ✅ ParameterEventHandler는 생성자 밖(노드가 shared_ptr로 소유된 이후)에 초기화
   //    0ms 지연 타이머로 한 번만 실행되게 함
@@ -89,17 +87,12 @@ Controller::Controller()
 
 void Controller::wait_for_messages() {
   RCLCPP_INFO(this->get_logger(), "Controller Manager waiting for messages...");
-  bool track_length_received = false;
   bool waypoint_array_received = false;
   bool car_state_received = false;
 
-  while (rclcpp::ok() && (!track_length_received || !waypoint_array_received || !car_state_received)) {
+  while (rclcpp::ok() && (!waypoint_array_received || !car_state_received)) {
     rclcpp::spin_some(this->shared_from_this());
 
-    if (track_length_.has_value() && !track_length_received) {
-      RCLCPP_INFO(this->get_logger(), "Received track length");
-      track_length_received = true;
-    }
     if (waypoint_array_in_map_.size() > 0 && !waypoint_array_received) {
       RCLCPP_INFO(this->get_logger(), "Received waypoint array");
       waypoint_array_received = true;
@@ -236,6 +229,12 @@ void Controller::car_state_cb(const Odometry::SharedPtr msg) {
   Eigen::RowVector3d pose;
   pose << p.x, p.y, yaw;
   position_in_map_ = pose;
+
+  // Extract frenet coordinates from the same odom message if available
+  // For now, use default frenet coordinates (can be enhanced later)
+  Eigen::Vector4d fr;
+  fr << 0.0, 0.0, msg->twist.twist.linear.x, msg->twist.twist.linear.y;
+  position_in_map_frenet_ = fr;
 }
 
 void Controller::car_state_frenet_cb(const Odometry::SharedPtr msg) {
@@ -259,7 +258,7 @@ std::pair<double,double> Controller::map_cycle() {
       track_length_.value_or(0.0));
 
   waypoint_safety_counter_ += 1;
-  if (waypoint_safety_counter_ >= rate_ * 5) {
+  if (waypoint_safety_counter_ >= rate_ * 10) {  // 5초 -> 10초로 연장
     RCLCPP_WARN(this->get_logger(), "[controller_manager] No fresh local waypoints. STOPPING!!");
     res.speed = 0.0;
     res.steering_angle = 0.0;
@@ -268,6 +267,12 @@ std::pair<double,double> Controller::map_cycle() {
 }
 
 void Controller::control_loop() {
+  // Check if shutdown was requested
+  if (shutdown_requested_.load()) {
+    publish_stop_command();
+    return;
+  }
+
   if (mode_ != "MAP" || !map_controller_) {
     RCLCPP_ERROR_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Unsupported mode or controller not ready");
     return;
@@ -288,9 +293,42 @@ void Controller::control_loop() {
   ack.header.stamp.nanosec = static_cast<uint32_t>(ns % 1000000000LL);
 
   ack.header.frame_id = "base_link";
-  ack.drive.steering_angle = steer;
+  ack.drive.steering_angle = steer;  
   ack.drive.speed = speed;
   drive_pub_->publish(ack);
+}
+
+void Controller::publish_stop_command() {
+  AckermannDriveStamped ack;
+
+  // Humble 호환 타임스탬프
+  const rclcpp::Time now = this->get_clock()->now();
+  const int64_t ns = now.nanoseconds();
+  ack.header.stamp.sec = static_cast<int32_t>(ns / 1000000000LL);
+  ack.header.stamp.nanosec = static_cast<uint32_t>(ns % 1000000000LL);
+
+  ack.header.frame_id = "base_link";
+  ack.drive.speed = 0.0;
+  ack.drive.steering_angle = 0.0;
+  ack.drive.acceleration = -5.0;  // Emergency brake
+  ack.drive.jerk = 0.0;
+  ack.drive.steering_angle_velocity = 0.0;
+
+  drive_pub_->publish(ack);
+
+  RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                       "Publishing stop command - Vehicle stopped for safety");
+}
+
+void Controller::shutdown_handler() {
+  RCLCPP_WARN(this->get_logger(), "Shutdown signal received - stopping vehicle safely");
+  shutdown_requested_.store(true);
+
+  // Publish multiple stop commands to ensure vehicle stops
+  for (int i = 0; i < 5; ++i) {
+    publish_stop_command();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
 }
 
 } // namespace controller

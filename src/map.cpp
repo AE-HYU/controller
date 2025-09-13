@@ -160,6 +160,11 @@ double MAP_Controller::calc_steering_angle(const Eigen::Vector2d& L1_point,
   steering_angle = clamp(steering_angle,
                          curr_steering_angle_ - threshold,
                          curr_steering_angle_ + threshold);
+
+  // 절대 최대 스티어링 각도 제한 (±0.4 라디안 = ±23도)
+  const double max_steering_angle = 0.4;
+  steering_angle = clamp(steering_angle, -max_steering_angle, max_steering_angle);
+
   curr_steering_angle_ = steering_angle;
   return steering_angle;
 }

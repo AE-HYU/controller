@@ -8,6 +8,9 @@
 
 #include <Eigen/Dense>
 #include <optional>
+#include <atomic>
+#include <thread>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -22,6 +25,10 @@ public:
 
   // Python의 wait_for_messages()를 main()에서 호출할 수 있게 public으로 둡니다.
   void wait_for_messages();
+
+  // 비상정지 관련 (public으로 외부에서 호출 가능)
+  void shutdown_handler();
+  void publish_stop_command();
 
 private:
   // ===== 파라미터/모드 =====
@@ -78,6 +85,9 @@ private:
 
   // MAP 1사이클
   std::pair<double,double> map_cycle(); // speed, steer
+
+private:
+  std::atomic<bool> shutdown_requested_{false};
 };
 
 } // namespace controller
