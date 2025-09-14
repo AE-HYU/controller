@@ -317,6 +317,12 @@ void Controller::car_state_cb(const Odometry::SharedPtr msg) {
         // Adjust s by the longitudinal offset
         s += ds;
 
+        // Additional validation for large lateral errors
+        if (std::abs(d) > 3.0) {
+            RCLCPP_WARN(this->get_logger(), "Very large lateral error detected: d=%.2f m at pos=(%.2f,%.2f)",
+                       d, p.x, p.y);
+        }
+
         fr << s, d, msg->twist.twist.linear.x, msg->twist.twist.linear.y;
 
         RCLCPP_DEBUG(this->get_logger(), "Frenet coords: s=%.3f, d=%.3f (nearest_idx=%d, pos=(%.3f,%.3f))",

@@ -440,8 +440,15 @@ std::pair<Eigen::Vector2d, double> MAP_Controller::calc_L1_point(double lateral_
 
   double L1_distance = q_l1_ + speed_now_ * m_l1_;
 
-  const double lower_bound = std::max(t_clip_min_, std::sqrt(2.0) * lateral_error);
+  // For large lateral errors, increase L1 distance more aggressively to improve stability
+  const double lateral_multiplier = (lateral_error > 1.0) ? 2.0 : std::sqrt(2.0);
+  const double lower_bound = std::max(t_clip_min_, lateral_multiplier * lateral_error);
   L1_distance = utils::clamp(L1_distance, lower_bound, t_clip_max_);
+
+  if (logger_info_ && lateral_error > 1.0) {
+    logger_info_("[MAP Controller] Large lateral error: " + std::to_string(lateral_error) +
+                 "m, L1_distance: " + std::to_string(L1_distance) + "m");
+  }
 
   Eigen::Vector2d L1_point =
       waypoint_at_distance_before_car(L1_distance,
@@ -489,7 +496,8 @@ double MAP_Controller::speed_steer_scaling(double steer, double speed) const {
 std::pair<double,double> MAP_Controller::calc_lateral_error_norm() const {
   const double lateral_error = std::abs(position_in_map_frenet_(1));
 
-  const double max_lat_e = 0.5;
+  // Increase max lateral error to handle off-raceline starts
+  const double max_lat_e = 2.0;  // Increased from 0.5 to 2.0 meters
   const double min_lat_e = 0.0;
   const double lat_e_clip = utils::clamp(lateral_error, min_lat_e, max_lat_e);
   const double lat_e_norm = 0.5 * ((lat_e_clip - min_lat_e) / (max_lat_e - min_lat_e));
