@@ -399,12 +399,22 @@ double MAP_Controller::calc_steering_angle(const Eigen::Vector2d& L1_point,
   steering_angle *= utils::clamp(1.0 + (speed_now_ / 10.0), 1.0, 1.25);
 
   const double threshold = 0.4;
-  if (std::abs(steering_angle - curr_steering_angle_) > threshold) {
-    if (logger_info_) logger_info_("[MAP Controller] steering angle clipped");
+
+  // Allow larger initial steering angle change to avoid startup clipping
+  static bool first_steering_calculation = true;
+  if (first_steering_calculation) {
+    first_steering_calculation = false;
+    if (logger_info_) logger_info_("[MAP Controller] First steering calculation, skipping rate limiting");
+  } else if (std::abs(steering_angle - curr_steering_angle_) > threshold) {
+    if (logger_info_) {
+      double clamped_angle = utils::clamp(steering_angle, curr_steering_angle_ - threshold, curr_steering_angle_ + threshold);
+      logger_info_("[MAP Controller] steering angle clipped: " + std::to_string(steering_angle) +
+                   " -> " + std::to_string(clamped_angle));
+    }
+    steering_angle = utils::clamp(steering_angle,
+                           curr_steering_angle_ - threshold,
+                           curr_steering_angle_ + threshold);
   }
-  steering_angle = utils::clamp(steering_angle,
-                         curr_steering_angle_ - threshold,
-                         curr_steering_angle_ + threshold);
 
   const double max_steering_angle = 0.4;
   steering_angle = utils::clamp(steering_angle, -max_steering_angle, max_steering_angle);

@@ -298,23 +298,29 @@ void Controller::car_state_cb(const Odometry::SharedPtr msg) {
         Eigen::Vector2d current_pos(p.x, p.y);
         int nearest_idx = controller::utils::nearest_waypoint(current_pos, waypoint_array_in_map_.leftCols<2>());
 
-        // Use s_m from nearest waypoint and calculate d from track boundaries
+        // Use s_m from nearest waypoint and interpolate for more accuracy
         double s = waypoint_array_in_map_(nearest_idx, 4);  // s_m from waypoint
 
-        // Calculate lateral distance (d) as distance from current position to waypoint
+        // Calculate more accurate lateral distance
         Eigen::Vector2d waypoint_pos = waypoint_array_in_map_.row(nearest_idx).head<2>();
-        double d = (current_pos - waypoint_pos).norm();
-
-        // Determine sign of d based on track geometry (left/right of track)
-        // This is a simplified calculation - could be improved with track heading
         double waypoint_psi = waypoint_array_in_map_(nearest_idx, 6);  // psi_rad
-        Eigen::Vector2d track_direction(std::cos(waypoint_psi), std::sin(waypoint_psi));
+
+        // Project vehicle position onto track coordinate system
         Eigen::Vector2d to_vehicle = current_pos - waypoint_pos;
-        double cross_product = track_direction.x() * to_vehicle.y() - track_direction.y() * to_vehicle.x();
-        d = (cross_product > 0) ? d : -d;
+        Eigen::Vector2d track_tangent(std::cos(waypoint_psi), std::sin(waypoint_psi));
+        Eigen::Vector2d track_normal(-std::sin(waypoint_psi), std::cos(waypoint_psi));
+
+        // Calculate longitudinal and lateral distances
+        double ds = to_vehicle.dot(track_tangent);  // along track direction
+        double d = to_vehicle.dot(track_normal);    // perpendicular to track
+
+        // Adjust s by the longitudinal offset
+        s += ds;
 
         fr << s, d, msg->twist.twist.linear.x, msg->twist.twist.linear.y;
-        RCLCPP_DEBUG(this->get_logger(), "Frenet coords: s=%.3f, d=%.3f (nearest_idx=%d)", s, d, nearest_idx);
+
+        RCLCPP_DEBUG(this->get_logger(), "Frenet coords: s=%.3f, d=%.3f (nearest_idx=%d, pos=(%.3f,%.3f))",
+                    s, d, nearest_idx, p.x, p.y);
     } else {
         // Fallback when no waypoints available
         fr << 0.0, 0.0, msg->twist.twist.linear.x, msg->twist.twist.linear.y;
