@@ -35,4 +35,3 @@ crazy_controller:
     trailing_i_gain: 0.000
     trailing_d_gain: 0.2
     blind_trailing_speed: 1.5
-

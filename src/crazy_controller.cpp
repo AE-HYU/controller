@@ -65,6 +65,8 @@ bool Controller::initialize() {
                           std::bind(&Controller::local_waypoint_cb, this, std::placeholders::_1));
     sub_car_state_ = this->create_subscription<Odometry>("/odom", 10,
                      std::bind(&Controller::car_state_cb, this, std::placeholders::_1));
+    sub_car_state_frenet_ = this->create_subscription<Odometry>("/car_state/frenet/odom", 10,
+                           std::bind(&Controller::car_state_frenet_cb, this, std::placeholders::_1));
 
     // Initialize parameter event handler with minimal delay to avoid bad_weak_ptr
     param_init_timer_ = this->create_wall_timer(
@@ -291,48 +293,16 @@ void Controller::car_state_cb(const Odometry::SharedPtr msg) {
     Eigen::RowVector3d pose;
     pose << p.x, p.y, yaw;
     position_in_map_ = pose;
+}
 
-    // Calculate Frenet coordinates using nearest waypoint
+void Controller::car_state_frenet_cb(const Odometry::SharedPtr msg) {
+    const double s  = msg->pose.pose.position.x;
+    const double d  = msg->pose.pose.position.y;
+    const double vs = msg->twist.twist.linear.x;
+    const double vd = msg->twist.twist.linear.y;
+
     Eigen::Vector4d fr;
-    if (waypoint_array_in_map_.rows() > 0) {
-        Eigen::Vector2d current_pos(p.x, p.y);
-        int nearest_idx = crazy_controller::utils::nearest_waypoint(current_pos, waypoint_array_in_map_.leftCols<2>());
-
-        // Use s_m from nearest waypoint and interpolate for more accuracy
-        double s = waypoint_array_in_map_(nearest_idx, 4);  // s_m from waypoint
-
-        // Calculate more accurate lateral distance
-        Eigen::Vector2d waypoint_pos = waypoint_array_in_map_.row(nearest_idx).head<2>();
-        double waypoint_psi = waypoint_array_in_map_(nearest_idx, 6);  // psi_rad
-
-        // Project vehicle position onto track coordinate system
-        Eigen::Vector2d to_vehicle = current_pos - waypoint_pos;
-        Eigen::Vector2d track_tangent(std::cos(waypoint_psi), std::sin(waypoint_psi));
-        Eigen::Vector2d track_normal(-std::sin(waypoint_psi), std::cos(waypoint_psi));
-
-        // Calculate longitudinal and lateral distances
-        double ds = to_vehicle.dot(track_tangent);  // along track direction
-        double d = to_vehicle.dot(track_normal);    // perpendicular to track
-
-        // Adjust s by the longitudinal offset
-        s += ds;
-
-        // Additional validation for large lateral errors
-        if (std::abs(d) > 3.0) {
-            RCLCPP_WARN(this->get_logger(), "Very large lateral error detected: d=%.2f m at pos=(%.2f,%.2f)",
-                       d, p.x, p.y);
-        }
-
-        fr << s, d, msg->twist.twist.linear.x, msg->twist.twist.linear.y;
-
-        RCLCPP_DEBUG(this->get_logger(), "Frenet coords: s=%.3f, d=%.3f (nearest_idx=%d, pos=(%.3f,%.3f))",
-                    s, d, nearest_idx, p.x, p.y);
-    } else {
-        // Fallback when no waypoints available
-        fr << 0.0, 0.0, msg->twist.twist.linear.x, msg->twist.twist.linear.y;
-        RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                              "No waypoints available for Frenet calculation");
-    }
+    fr << s, d, vs, vd;
     position_in_map_frenet_ = fr;
 }
 

@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -20,17 +20,18 @@ def generate_launch_description():
         description='Use simulation mode if true, real car mode if false'
     )
 
-    l1_params_path_arg = DeclareLaunchArgument(
-        'l1_params_path',
-        default_value=[FindPackageShare('crazy_controller'), '/config/l1_params.yaml'],
-        description='Path to L1 parameters file'
-    )
-
-    lookup_table_path_arg = DeclareLaunchArgument(
-        'lookup_table_path',
-        default_value=[FindPackageShare('crazy_controller'), '/config/RBC1_pacejka_lookup_table.csv'],
-        description='Path to lookup table file'
-    )
+    # Dynamic parameter paths based on sim_mode
+    l1_params_path = PythonExpression([
+        "'", FindPackageShare('crazy_controller'), "/config/l1_params_sim.yaml' if '", 
+        LaunchConfiguration('sim_mode'), "' == 'true' else '",
+        FindPackageShare('crazy_controller'), "/config/l1_params.yaml'"
+    ])
+    
+    lookup_table_path = PythonExpression([
+        "'", FindPackageShare('crazy_controller'), "/config/SIM_linear_lookup_table.csv' if '", 
+        LaunchConfiguration('sim_mode'), "' == 'true' else '",
+        FindPackageShare('crazy_controller'), "/config/RBC1_pacejka_lookup_table.csv'"
+    ])
 
     # Controller node for simulation mode
     controller_sim_node = Node(
@@ -40,8 +41,8 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'mode': LaunchConfiguration('mode'),
-            'l1_params_path': LaunchConfiguration('l1_params_path'),
-            'lookup_table_path': LaunchConfiguration('lookup_table_path'),
+            'l1_params_path': l1_params_path,
+            'lookup_table_path': lookup_table_path,
         }],
         remappings=[
             ('/planned_path', '/planned_waypoints'),
@@ -58,8 +59,8 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'mode': LaunchConfiguration('mode'),
-            'l1_params_path': LaunchConfiguration('l1_params_path'),
-            'lookup_table_path': LaunchConfiguration('lookup_table_path'),
+            'l1_params_path': l1_params_path,
+            'lookup_table_path': lookup_table_path,
         }],
         remappings=[
             ('/planned_path', '/planned_waypoints'),
@@ -71,8 +72,6 @@ def generate_launch_description():
     return LaunchDescription([
         mode_arg,
         sim_mode_arg,
-        l1_params_path_arg,
-        lookup_table_path_arg,
         controller_sim_node,
         controller_real_node,
     ])

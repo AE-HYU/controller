@@ -44,6 +44,7 @@ private:
     void track_length_cb(const ae_hyu_msgs::msg::WpntArray::SharedPtr msg);
     void local_waypoint_cb(const ae_hyu_msgs::msg::WpntArray::SharedPtr msg);
     void car_state_cb(const nav_msgs::msg::Odometry::SharedPtr msg);
+    void car_state_frenet_cb(const nav_msgs::msg::Odometry::SharedPtr msg);
     void on_parameter_event(const rcl_interfaces::msg::ParameterEvent & event);
 
     // Configuration parameters
@@ -56,6 +57,7 @@ private:
     rclcpp::Subscription<ae_hyu_msgs::msg::WpntArray>::SharedPtr sub_track_length_;
     rclcpp::Subscription<ae_hyu_msgs::msg::WpntArray>::SharedPtr sub_local_waypoints_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_car_state_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_car_state_frenet_;
 
     // Timers
     rclcpp::TimerBase::SharedPtr timer_;
