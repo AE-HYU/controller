@@ -1,4 +1,4 @@
-#include "controller/controller.hpp"
+#include "crazy_controller/crazy_controller.hpp"
 
 #include <yaml-cpp/yaml.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -20,7 +20,7 @@ using rcl_interfaces::msg::FloatingPointRange;
 using rcl_interfaces::msg::ParameterDescriptor;
 using rcl_interfaces::msg::ParameterType;
 
-namespace controller {
+namespace crazy_controller {
 
 Controller::Controller()
 : rclcpp::Node(
@@ -105,7 +105,7 @@ void Controller::init_map_controller() {
     auto info = [this](const std::string& s){ RCLCPP_INFO(this->get_logger(), "[MAP] %s", s.c_str()); };
     auto warn = [this](const std::string& s){ RCLCPP_WARN(this->get_logger(), "[MAP] %s", s.c_str()); };
 
-    map_controller_ = std::make_unique<controller::MAP_Controller>(
+    map_controller_ = std::make_unique<crazy_controller::MAP_Controller>(
         this->get_parameter("t_clip_min").as_double(),
         this->get_parameter("t_clip_max").as_double(),
         this->get_parameter("m_l1").as_double(),
@@ -127,10 +127,10 @@ void Controller::init_map_controller() {
 
 void Controller::declare_l1_dynamic_parameters_from_yaml(const std::string& yaml_path) {
     YAML::Node root = YAML::LoadFile(yaml_path);
-    if (!root["controller"] || !root["controller"]["ros__parameters"]) {
-        throw std::runtime_error("Invalid l1_params YAML: missing controller.ros__parameters");
+    if (!root["crazy_controller"] || !root["crazy_controller"]["ros__parameters"]) {
+        throw std::runtime_error("Invalid l1_params YAML: missing crazy_controller.ros__parameters");
     }
-    const YAML::Node params = root["controller"]["ros__parameters"];
+    const YAML::Node params = root["crazy_controller"]["ros__parameters"];
 
     auto fp = [](double a, double b, double step){
         FloatingPointRange r;
@@ -296,7 +296,7 @@ void Controller::car_state_cb(const Odometry::SharedPtr msg) {
     Eigen::Vector4d fr;
     if (waypoint_array_in_map_.rows() > 0) {
         Eigen::Vector2d current_pos(p.x, p.y);
-        int nearest_idx = controller::utils::nearest_waypoint(current_pos, waypoint_array_in_map_.leftCols<2>());
+        int nearest_idx = crazy_controller::utils::nearest_waypoint(current_pos, waypoint_array_in_map_.leftCols<2>());
 
         // Use s_m from nearest waypoint and interpolate for more accuracy
         double s = waypoint_array_in_map_(nearest_idx, 4);  // s_m from waypoint
@@ -393,10 +393,10 @@ void Controller::shutdown_handler() {
     }
 }
 
-} // namespace controller
+} // namespace crazy_controller
 
 // Global pointer to the node for signal handler
-std::shared_ptr<controller::Controller> g_node = nullptr;
+std::shared_ptr<crazy_controller::Controller> g_node = nullptr;
 
 void signalHandler(int /* signum */) {
     if (g_node) {
@@ -408,7 +408,7 @@ void signalHandler(int /* signum */) {
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
 
-    auto node = std::make_shared<controller::Controller>();
+    auto node = std::make_shared<crazy_controller::Controller>();
     g_node = node;  // Set global pointer for signal handler
 
     // Register signal handlers

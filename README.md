@@ -6,14 +6,14 @@ Advanced MAP (Model-based Adaptive Pursuit) controller for F1TENTH autonomous ra
 
 ```bash
 # Build
-colcon build --packages-select controller
+colcon build --packages-select crazy_controller
 source install/setup.bash
 
 # Real car (default)
-ros2 launch controller controller_launch.py
+ros2 launch crazy_controller controller_launch.py
 
 # Simulation mode
-ros2 launch controller controller_launch.py sim_mode:=true
+ros2 launch crazy_controller controller_launch.py sim_mode:=true
 ```
 
 ## Launch Parameters
@@ -43,7 +43,7 @@ ros2 launch controller controller_launch.py sim_mode:=true
 Edit `config/l1_params.yaml`:
 
 ```yaml
-controller:
+crazy_controller:
   ros__parameters:
     # L1 Controller Parameters
     t_clip_min: 1.0               # Minimum time horizon

@@ -1,4 +1,4 @@
-controller:
+crazy_controller:
   ros__parameters:
     t_clip_min: 1.5  # Increase for more stable startup
     t_clip_max: 5

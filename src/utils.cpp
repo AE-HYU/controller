@@ -1,4 +1,4 @@
-#include "controller/utils.hpp"
+#include "crazy_controller/utils.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <fstream>
@@ -10,7 +10,7 @@
 #include <cctype>
 #include <utility>
 
-namespace controller {
+namespace crazy_controller {
 
 // Parameter Event Handler implementation
 struct ParameterEventHandler::Impl {
@@ -545,4 +545,4 @@ Eigen::Vector2d MAP_Controller::waypoint_at_distance_before_car(double distance,
   return waypoints_xy.row(idx).transpose();
 }
 
-} // namespace controller
+} // namespace crazy_controller

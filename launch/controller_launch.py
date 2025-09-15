@@ -22,19 +22,19 @@ def generate_launch_description():
 
     l1_params_path_arg = DeclareLaunchArgument(
         'l1_params_path',
-        default_value=[FindPackageShare('controller'), '/config/l1_params.yaml'],
+        default_value=[FindPackageShare('crazy_controller'), '/config/l1_params.yaml'],
         description='Path to L1 parameters file'
     )
 
     lookup_table_path_arg = DeclareLaunchArgument(
         'lookup_table_path',
-        default_value=[FindPackageShare('controller'), '/config/RBC1_pacejka_lookup_table.csv'],
+        default_value=[FindPackageShare('crazy_controller'), '/config/RBC1_pacejka_lookup_table.csv'],
         description='Path to lookup table file'
     )
 
     # Controller node for simulation mode
     controller_sim_node = Node(
-        package='controller',
+        package='crazy_controller',
         executable='controller_node',
         name='controller_manager',
         output='screen',
@@ -52,7 +52,7 @@ def generate_launch_description():
 
     # Controller node for real car mode
     controller_real_node = Node(
-        package='controller',
+        package='crazy_controller',
         executable='controller_node',
         name='controller_manager',
         output='screen',

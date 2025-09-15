@@ -14,9 +14,9 @@
 #include <string>
 #include <vector>
 
-#include "controller/utils.hpp"
+#include "crazy_controller/utils.hpp"
 
-namespace controller {
+namespace crazy_controller {
 
 class MAP_Controller; // Forward declaration
 
@@ -78,7 +78,7 @@ private:
     std::atomic<bool> shutdown_requested_{false};
 
     // MAP controller
-    std::unique_ptr<controller::MAP_Controller> map_controller_;
+    std::unique_ptr<crazy_controller::MAP_Controller> map_controller_;
 };
 
-} // namespace controller
+} // namespace crazy_controller

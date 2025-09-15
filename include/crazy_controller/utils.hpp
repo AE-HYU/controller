@@ -9,7 +9,7 @@
 #include <rcl_interfaces/msg/parameter_event.hpp>
 
 // Forward declarations
-namespace controller {
+namespace crazy_controller {
 
 // Parameter Event Handler
 class ParameterEventHandler {
@@ -160,4 +160,4 @@ private:
     double curr_steering_angle_;
 };
 
-} // namespace controller
+} // namespace crazy_controller
