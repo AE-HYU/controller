@@ -47,6 +47,7 @@ def generate_launch_description():
         remappings=[
             ('/planned_path', '/planned_waypoints'),
             ('/odom', '/ego_racecar/odom'),
+            ('/frenet/odom', '/car_state/frenet/odom'),
         ],
         condition=IfCondition(LaunchConfiguration('sim_mode'))
     )
@@ -65,6 +66,7 @@ def generate_launch_description():
         remappings=[
             ('/planned_path', '/planned_waypoints'),
             ('/odom', '/pf/pose/odom'),
+            ('/frenet/odom', '/car_state/frenet/odom'),
         ],
         condition=UnlessCondition(LaunchConfiguration('sim_mode'))
     )

@@ -1,6 +1,6 @@
 ## Sim mode
 ## L1 Controller Parameters (Lateral Control)
-controller:
+crazy_controller:
   ros__parameters:
     t_clip_min: 1
     t_clip_max: 5
