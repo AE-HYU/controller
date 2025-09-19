@@ -20,6 +20,12 @@ def generate_launch_description():
         description='Use simulation mode if true, real car mode if false'
     )
 
+    odom_mode_arg = DeclareLaunchArgument(
+        'odom_mode',
+        default_value='ego',
+        description='Odometry mode: ego (use /ego_racecar/odom) or pf (use /pf/pose/odom)'
+    )
+
     # Dynamic parameter paths based on sim_mode
     l1_params_path = PythonExpression([
         "'", FindPackageShare('crazy_controller'), "/config/l1_params_sim.yaml' if '", 
@@ -31,6 +37,11 @@ def generate_launch_description():
         "'", FindPackageShare('crazy_controller'), "/config/SIM_linear_lookup_table.csv' if '", 
         LaunchConfiguration('sim_mode'), "' == 'true' else '",
         FindPackageShare('crazy_controller'), "/config/RBC1_pacejka_lookup_table.csv'"
+    ])
+
+    # Dynamic odom topic based on odom_mode
+    odom_topic = PythonExpression([
+        "'/ego_racecar/odom' if '", LaunchConfiguration('odom_mode'), "' == 'ego' else '/pf/pose/odom'"
     ])
 
     # Controller node for simulation mode
@@ -46,7 +57,7 @@ def generate_launch_description():
         }],
         remappings=[
             ('/planned_path', '/planned_waypoints'),
-            ('/odom', '/ego_racecar/odom'),
+            ('/odom', odom_topic),
             ('/frenet/odom', '/car_state/frenet/odom'),
         ],
         condition=IfCondition(LaunchConfiguration('sim_mode'))
@@ -74,6 +85,7 @@ def generate_launch_description():
     return LaunchDescription([
         mode_arg,
         sim_mode_arg,
+        odom_mode_arg,
         controller_sim_node,
         controller_real_node,
     ])

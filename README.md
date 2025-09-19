@@ -14,6 +14,9 @@ ros2 launch crazy_controller controller_launch.py
 
 # Simulation
 ros2 launch crazy_controller controller_launch.py sim_mode:=true
+
+# Simulation with PF odometry
+ros2 launch crazy_controller controller_launch.py sim_mode:=true odom_mode:=pf
 ```
 
 ## Launch Parameters
@@ -21,6 +24,7 @@ ros2 launch crazy_controller controller_launch.py sim_mode:=true
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `sim_mode` | `false` | Use simulation topics if true |
+| `odom_mode` | `ego` | Odometry mode: `ego` (/ego_racecar/odom) or `pf` (/pf/pose/odom) |
 | `mode` | `MAP` | Control algorithm (MAP only) |
 | `l1_params_path` | Auto-selected | L1 parameter file by mode |
 | `lookup_table_path` | Auto-selected | Steering lookup table by mode |
@@ -33,7 +37,7 @@ ros2 launch crazy_controller controller_launch.py sim_mode:=true
 - **Output**: `/drive` - Ackermann drive commands
 
 ### Simulation Mode
-- **Input**: `/ego_racecar/odom`, `/car_state/frenet/odom` - Simulation pose data
+- **Input**: `/ego_racecar/odom` (default) or `/pf/pose/odom` (with `odom_mode:=pf`), `/car_state/frenet/odom` - Simulation pose data
 - **Input**: `/global_waypoints`, `/local_waypoints` - Track and path data
 - **Output**: `/drive` - Ackermann drive commands
 
